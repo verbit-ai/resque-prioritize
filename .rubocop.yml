@@ -14,5 +14,14 @@ Style/AndOr:
 Metrics/BlockLength:
   Exclude: ['*.gemspec']
 
+Metrics/MethodLength:
+  Max: 25
+
+Naming/FileName:
+  Exclude: ['lib/resque-prioritize.rb']
+
+Style/BlockDelimiters:
+  Enabled: false
+
 Layout/SpaceInsideHashLiteralBraces:
   EnforcedStyle: no_space
