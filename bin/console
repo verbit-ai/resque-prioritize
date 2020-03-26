@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 
-require "bundler/setup"
-require "resque/prioritize"
+require 'bundler/setup'
+require 'resque/plugins/prioritize'
 
 # You can add fixtures and/or initialization code here to make experimenting
 # with your gem easier. You can also use a different console, if you like.
@@ -10,5 +10,6 @@ require "resque/prioritize"
 # require "pry"
 # Pry.start
 
-require "irb"
-IRB.start(__FILE__)
+require 'pry'
+require_relative '../spec/spec_helper'
+Pry.start
