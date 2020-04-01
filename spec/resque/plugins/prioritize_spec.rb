@@ -40,6 +40,14 @@ RSpec.describe Resque::Plugins::Prioritize do
       its_call(TestWorker.with_priority(10)) { is_expected.to ret false }
       its_call(TestWorker.with_priority(20)) { is_expected.to ret true }
     end
+
+    context 'when called twice' do
+      subject { super().with_priority(40) }
+
+      %i[to_s name inspect].each do |m|
+        its(m) { is_expected.to eq 'TestWorker{{priority}:40}' }
+      end
+    end
   end
 
   describe '.without_priority' do

@@ -49,7 +49,9 @@ module Resque
 
         # Returns inherited class with stored priority
         def with_priority(priority)
-          original = self
+          # in cases when someone call twice `Worker.with_priority(10).with_priority(20)`
+          original = without_priority
+
           # Produce an exact copy of the current worker's class, including all data,
           # but with @resque_prioritize_priority set. It is also stringified differently, as
           # "WorkerName{priority:10}", allowing redefined Resque deserializer to understand how to
