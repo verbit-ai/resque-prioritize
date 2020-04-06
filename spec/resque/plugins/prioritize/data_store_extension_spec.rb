@@ -52,6 +52,13 @@ RSpec.describe Resque::Plugins::Prioritize::DataStoreExtension, :not_watch_queue
 
     its_call(:test) { is_expected.to ret Resque.encode(class: 'TestWorker', args: [0, 1]) }
     its_call(:test_prioritized) { is_expected.to ret Resque.encode(class: TestWorker.with_priority(3), args: [13, 14]) }
+
+    context 'when queue empty on queue type check, but with items when start process it' do
+      # Immitate empty queue on queue type check
+      before { allow(Resque.redis.instance_variable_get(:@redis)).to receive(:type).and_return('none') }
+
+      its_call(:test_prioritized) { is_expected.to ret Resque.encode(class: TestWorker.with_priority(3), args: [13, 14]) }
+    end
   end
 
   describe '.queue_size' do

@@ -111,11 +111,16 @@ module Resque
 
           # Check by type. If type is zset - queue is prioritized.
           # In other cases - work like it was before
-          #
-          # NOTE: checking by type - is better practise, that by queue name.
           def prioritized?(queue)
-            queue = queue.to_s.include?('queue:') ? queue : redis_key_for_queue(queue)
-            @redis.type(queue) == 'zset'
+            queue = queue.to_s.include?('queue:') ? queue.to_s : redis_key_for_queue(queue)
+            queue_type = @redis.type(queue)
+            # With type check we will handle the cases when queue postfix was renamed during
+            # the work. So, it is the better practise. However, it doesn't work for empty queues.
+            queue_type == 'zset' || \
+              # In case when queue is empty on type check, but not empty on the action
+              # (pop, in the mos cases) we could have an error.
+              # So, in that cases we should check queue type by name.
+              (queue_type == 'none' && queue.include?(Prioritize.prioritized_queue_postfix))
           end
 
           def z_queue(queue)
