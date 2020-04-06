@@ -16,6 +16,8 @@ module Resque
 
         # Override default QueueAccess to work with redis Zset instead of redis list
         module QueueAccessExtension
+          class PipelineNotSupported < StandardError; end
+
           def push_to_queue(queue, encoded_item)
             priority = extract_priority(encoded_item)
             priority ? z_push_to_queue(z_queue(queue), encoded_item, priority) : super
@@ -54,17 +56,20 @@ module Resque
           end
 
           def z_pop_from_queue(queue)
-            item, _priority = @redis.zpopmax(redis_key_for_queue(queue))
-            without_uuid(item)
+            handle_pipeline(@redis.zpopmax(redis_key_for_queue(queue))) { |item, _|
+              without_uuid(item)
+            }
           end
 
           # Get the number of items in the queue
           def z_queue_size(queue)
-            @redis.zcount(redis_key_for_queue(queue), 0, Float::INFINITY).to_i
+            handle_pipeline(@redis.zcount(redis_key_for_queue(queue), 0, Float::INFINITY), &:to_i)
           end
 
           def z_everything_in_queue(queue)
-            @redis.zrevrange(redis_key_for_queue(queue), 0, -1).map(&method(:without_uuid))
+            handle_pipeline(@redis.zrevrange(redis_key_for_queue(queue), 0, -1)) { |items|
+              items.map(&method(:without_uuid))
+            }
           end
 
           # Remove data from the queue, if it's there, returning the number of removed elements
@@ -75,7 +80,12 @@ module Resque
           # NOTE: placing uuids into special key - not a good idea. We could to remove queue,
           # for example, and we lose symchronize between two lists. So speed increase in this case
           # will break a logic.
+          #
+          # NOTE: We need at least two requests to redis, so, we could not to make it inside
+          # pipeline block
           def z_remove_from_queue(queue, data)
+            raise PipelineNotSupported if @redis.client.is_a?(Redis::Pipeline)
+
             priority = extract_priority(data)
             z_item = @redis.zrevrange(redis_key_for_queue(queue), 0, -1).find do |item|
               (priority && item.include?(data)) || \
@@ -86,12 +96,19 @@ module Resque
 
           # parent method returns object, when count eq 1, and array, whe count is more.
           def z_list_range(key, start = 0, count = 1)
-            list = Array(@redis.zrevrange(key, start, start + count - 1))
-                   .map(&method(:without_uuid))
+            handle_pipeline(@redis.zrevrange(key, start, start + count - 1)) { |object|
+              list = Array(object).map(&method(:without_uuid))
 
-            return list.first if count == 1
+              next list.first if count == 1
 
-            list
+              list
+            }
+          end
+
+          # Hack to allow gem work inside Redis Pipilened block.
+          # NOTE: See Resque::Plugins::Prioritize::RedisFutureExtension#add_transformation
+          def handle_pipeline(object, &block)
+            object.is_a?(Redis::Future) ? object.add_transformation(&block) : block.call(object)
           end
 
           # zset store only uniq elements. But redis queue could have few same elements.
@@ -112,13 +129,19 @@ module Resque
           # Check by type. If type is zset - queue is prioritized.
           # In other cases - work like it was before
           def prioritized?(queue)
-            queue = queue.to_s.include?('queue:') ? queue.to_s : redis_key_for_queue(queue)
+            queue = queue.to_s
+            if @redis.client.is_a?(Redis::Pipeline)
+              # To prevent unexpected values inside result block
+              return queue.include?(Prioritize.prioritized_queue_postfix)
+            end
+
+            queue = queue.include?('queue:') ? queue : redis_key_for_queue(queue)
             queue_type = @redis.type(queue)
             # With type check we will handle the cases when queue postfix was renamed during
             # the work. So, it is the better practise. However, it doesn't work for empty queues.
             queue_type == 'zset' || \
-              # In case when queue is empty on type check, but not empty on the action
-              # (pop, in the mos cases) we could have an error.
+              # In case when queue is empty on type check, but not empty on the action (pop, in
+              # the most cases), we could have an error.
               # So, in that cases we should check queue type by name.
               (queue_type == 'none' && queue.include?(Prioritize.prioritized_queue_postfix))
           end

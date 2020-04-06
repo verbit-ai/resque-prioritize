@@ -40,6 +40,25 @@ RSpec.describe Resque::Plugins::Prioritize::DataStoreExtension, :not_watch_queue
           ]
       }
     end
+
+    context 'when called inside multi block' do
+      subject {
+        Resque.redis.multi {
+          Resque.redis.push_to_queue(:test, Resque.encode(class: TestWorker, args: args))
+          Resque.redis.push_to_queue(:test, Resque.encode(class: TestWorker.with_priority(20), args: args))
+        }
+      }
+
+      its_block {
+        is_expected.to change { Resque.redis.lrange('queue:test', 0, -1) }
+          .to([Resque.encode(class: 'TestWorker', args: [1, 2])])
+          .and change { Resque.redis.zrevrange('queue:test_prioritized', 0, -1) }
+          .to [
+            match('"class":"TestWorker{{priority}:20}","args":\[1,2\]')
+              .and(match(Resque::Plugins::Prioritize::UUID_REGEXP))
+          ]
+      }
+    end
   end
 
   describe '.pop_from_queue' do
@@ -59,6 +78,22 @@ RSpec.describe Resque::Plugins::Prioritize::DataStoreExtension, :not_watch_queue
 
       its_call(:test_prioritized) { is_expected.to ret Resque.encode(class: TestWorker.with_priority(3), args: [13, 14]) }
     end
+
+    context 'when called inside multi block' do
+      subject {
+        Resque.redis.multi {
+          Resque.redis.pop_from_queue(:test)
+          Resque.redis.pop_from_queue(:test_prioritized)
+        }
+      }
+
+      it {
+        is_expected.to eq [
+          Resque.encode(class: 'TestWorker', args: [0, 1]),
+          Resque.encode(class: TestWorker.with_priority(3), args: [13, 14])
+        ]
+      }
+    end
   end
 
   describe '.queue_size' do
@@ -71,6 +106,17 @@ RSpec.describe Resque::Plugins::Prioritize::DataStoreExtension, :not_watch_queue
 
     its_call(:test) { is_expected.to ret 3 }
     its_call(:test_prioritized) { is_expected.to ret 5 }
+
+    context 'when called inside multi block' do
+      subject {
+        Resque.redis.multi {
+          Resque.redis.queue_size(:test)
+          Resque.redis.queue_size(:test_prioritized)
+        }
+      }
+
+      it { is_expected.to eq [3, 5] }
+    end
   end
 
   describe '.everything_in_queue' do
@@ -91,6 +137,22 @@ RSpec.describe Resque::Plugins::Prioritize::DataStoreExtension, :not_watch_queue
         (0..4).map { |i| Resque.encode(class: TestWorker.with_priority(4 - i), args: [4 - i]) }
       )
     }
+
+    context 'when called inside multi block' do
+      subject {
+        Resque.redis.multi {
+          Resque.redis.everything_in_queue(:test)
+          Resque.redis.everything_in_queue(:test_prioritized)
+        }
+      }
+
+      it {
+        is_expected.to eq [
+          (0..2).map { |i| Resque.encode(class: TestWorker, args: [i]) },
+          (0..4).map { |i| Resque.encode(class: TestWorker.with_priority(4 - i), args: [4 - i]) }
+        ]
+      }
+    end
   end
 
   describe '.remove_from_queue' do
@@ -116,6 +178,17 @@ RSpec.describe Resque::Plugins::Prioritize::DataStoreExtension, :not_watch_queue
         .from([Resque.encode(class: 'TestWorker{{priority}:10}', args: [3, 4])])
         .to([])
     }
+
+    context 'when called inside multi block' do
+      subject {
+        Resque.redis.multi {
+          Resque.redis.remove_from_queue(:test, Resque.encode(class: 'TestWorker', args: [1, 2]))
+          Resque.redis.remove_from_queue(:test_prioritized, Resque.encode(class: 'TestWorker', args: [3, 4]))
+        }
+      }
+
+      its_block { is_expected.to raise_error(Resque::Plugins::Prioritize::DataStoreExtension::QueueAccessExtension::PipelineNotSupported) }
+    end
   end
 
   describe '.list_range' do
@@ -150,5 +223,21 @@ RSpec.describe Resque::Plugins::Prioritize::DataStoreExtension, :not_watch_queue
         (1..4).map { |i| Resque.encode(class: TestWorker.with_priority(4 - i), args: [4 - i]) }
       )
     }
+
+    context 'when called inside multi block' do
+      subject {
+        Resque.redis.multi {
+          Resque.redis.list_range('queue:test')
+          Resque.redis.list_range('queue:test_prioritized')
+        }
+      }
+
+      it {
+        is_expected.to eq [
+          Resque.encode(class: TestWorker, args: [0]),
+          Resque.encode(class: TestWorker.with_priority(4), args: [4])
+        ]
+      }
+    end
   end
 end
