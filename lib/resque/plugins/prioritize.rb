@@ -4,9 +4,11 @@ require 'resque'
 require_relative 'prioritize/version'
 require_relative 'prioritize/resque_extension'
 require_relative 'prioritize/data_store_extension'
+require_relative 'prioritize/redis_future_extension'
 
 Resque.prepend Resque::Plugins::Prioritize::ResqueExtension
 Resque::DataStore.prepend Resque::Plugins::Prioritize::DataStoreExtension
+Redis::Future.include Resque::Plugins::Prioritize::RedisFutureExtension
 
 module Resque
   module Plugins
