@@ -29,8 +29,8 @@ RSpec.describe Resque::Plugins::Prioritize do
     describe 'instance_variables' do
       subject { super().method(:instance_variable_get) }
 
-      its_call(:@queue) { is_expected.to ret :test }
       its_call(:@resque_prioritize_priority) { is_expected.to ret 20 }
+      its_call(:@queue) { is_expected.to ret :test_prioritized }
     end
 
     describe 'equality' do

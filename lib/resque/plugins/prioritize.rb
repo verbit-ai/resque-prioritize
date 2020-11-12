@@ -39,6 +39,12 @@ module Resque
         def included(base)
           base.extend ClassMethods
         end
+
+        def prioritized_name(queue)
+          queue = queue.to_s
+
+          :"#{queue}#{prioritized_queue_postfix unless queue.include?(prioritized_queue_postfix)}"
+        end
       end
 
       # Helper methods for workers
@@ -62,7 +68,10 @@ module Resque
             inherited.instance_variable_set(:@resque_prioritize_priority, priority)
 
             original.instance_variables.each do |var|
-              inherited.instance_variable_set(var, original.instance_variable_get(var))
+              value = original.instance_variable_get(var)
+              value = Prioritize.prioritized_name(value) if var == :@queue
+
+              inherited.instance_variable_set(var, value)
             end
 
             # override stringify methods

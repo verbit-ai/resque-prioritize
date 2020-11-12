@@ -147,11 +147,7 @@ module Resque
           end
 
           def z_queue(queue)
-            if queue.to_s.include?(Prioritize.prioritized_queue_postfix)
-              queue
-            else
-              "#{queue}#{Prioritize.prioritized_queue_postfix}"
-            end
+            Prioritize.prioritized_name(queue)
           end
         end
       end
