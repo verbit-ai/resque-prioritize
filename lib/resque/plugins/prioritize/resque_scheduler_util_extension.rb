@@ -4,7 +4,7 @@ module Resque
   module Plugins
     module Prioritize
       # Extension of resque class
-      module ResqueExtension
+      module ResqueSchedulerUtilExtension
         def self.prepended(base)
           class << base
             prepend ClassMethods

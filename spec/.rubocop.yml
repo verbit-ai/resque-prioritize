@@ -11,5 +11,11 @@ RSpec/EmptyExampleGroup:
 Metrics/BlockLength:
   Enabled: false
 
+RSpec/NestedGroups:
+  Max: 5
+
+RSpec/ImplicitBlockExpectation:
+  Enabled: false
+
 Metrics/LineLength:
   Enabled: false

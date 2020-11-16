@@ -1,10 +1,8 @@
 # frozen_string_literal: true
 
 require 'bundler/setup'
-require 'rspec'
-require 'saharspec'
-require 'rspec/its'
-require 'pry'
+Bundler.require(:default, :test)
+
 require 'resque/plugins/prioritize'
 
 Resque.redis = 'localhost:6379/resque_prioritize_test'

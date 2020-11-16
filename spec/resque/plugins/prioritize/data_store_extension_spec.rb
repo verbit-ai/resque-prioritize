@@ -11,6 +11,8 @@ RSpec.describe Resque::Plugins::Prioritize::DataStoreExtension, :not_watch_queue
     let(:args) { [1, 2] }
     let(:klass) { 'TestWorker' }
 
+    let(:uuid_regexp) { /#{format(Resque::Plugins::Prioritize::Serializer::VARIABLE_REGEXP, key: :uuid)}/i }
+
     its_block {
       is_expected.to change { Resque.redis.lrange('queue:test', 0, -1) }
         .to match_array [Resque.encode(class: 'TestWorker', args: [1, 2])]
@@ -22,8 +24,7 @@ RSpec.describe Resque::Plugins::Prioritize::DataStoreExtension, :not_watch_queue
       its_block {
         is_expected.to change { Resque.redis.zrevrange('queue:test_prioritized', 0, -1) }
           .to match_array [
-            match('"class":"TestWorker{{priority}:20}","args":\[1,2\]')
-              .and(match(Resque::Plugins::Prioritize::UUID_REGEXP))
+            match('"class":"TestWorker{{priority}:20}","args":\[1,2\]').and(match(uuid_regexp))
           ]
       }
     end
@@ -35,8 +36,7 @@ RSpec.describe Resque::Plugins::Prioritize::DataStoreExtension, :not_watch_queue
       its_block {
         is_expected.to change { Resque.redis.zrevrange('queue:test_prioritized', 0, -1) }
           .to match_array [
-            match('"class":"TestWorker{{priority}:20}","args":\[1,2\]')
-              .and(match(Resque::Plugins::Prioritize::UUID_REGEXP))
+            match('"class":"TestWorker{{priority}:20}","args":\[1,2\]').and(match(uuid_regexp))
           ]
       }
     end
@@ -54,8 +54,7 @@ RSpec.describe Resque::Plugins::Prioritize::DataStoreExtension, :not_watch_queue
           .to([Resque.encode(class: 'TestWorker', args: [1, 2])])
           .and change { Resque.redis.zrevrange('queue:test_prioritized', 0, -1) }
           .to [
-            match('"class":"TestWorker{{priority}:20}","args":\[1,2\]')
-              .and(match(Resque::Plugins::Prioritize::UUID_REGEXP))
+            match('"class":"TestWorker{{priority}:20}","args":\[1,2\]').and(match(uuid_regexp))
           ]
       }
     end
