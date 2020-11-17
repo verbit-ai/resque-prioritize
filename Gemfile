@@ -8,7 +8,14 @@ ruby '>= 2.6'
 gemspec
 
 group :development do
-  gem 'pry'
   gem 'rubocop'
   gem 'rubocop-rspec'
+end
+
+group :development, :test do
+  gem 'pry'
+  gem 'resque-scheduler' # it is not neccessary plugin. But if it present - we should extend it.
+  gem 'rspec', '~> 3.0'
+  gem 'rspec-its' # its(:foo) syntax
+  gem 'saharspec', '~> 0.0.5' # some syntactic sugar for RSpec
 end

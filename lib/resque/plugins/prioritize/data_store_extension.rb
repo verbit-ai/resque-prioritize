@@ -114,16 +114,17 @@ module Resque
           # zset store only uniq elements. But redis queue could have few same elements.
           # So, we should add some uuid to every element
           def with_uuid(encoded_item, uuid = SecureRandom.uuid)
-            encoded_item.match?(UUID_REGEXP) ? encoded_item : "#{encoded_item}{{uuid}:#{uuid}}"
+            without_uuid(encoded_item)
+              .then { |item| Serializer.serialize(item, uuid: uuid) }
           end
 
           # Remove uuid from item. See `with_uuid` method
           def without_uuid(item)
-            item&.sub(UUID_REGEXP, '')
+            Serializer.extract(item, :uuid).fetch(:rest)
           end
 
           def extract_priority(encoded_item)
-            encoded_item.match(PRIORITY_REGEXP)&.[](1)&.to_i
+            Serializer.extract(encoded_item, :priority).fetch(:priority)&.to_i
           end
 
           # Check by type. If type is zset - queue is prioritized.
@@ -147,7 +148,7 @@ module Resque
           end
 
           def z_queue(queue)
-            Prioritize.prioritized_name(queue)
+            Prioritize.to_prioritized_queue(queue)
           end
         end
       end

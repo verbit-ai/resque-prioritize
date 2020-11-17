@@ -2,6 +2,10 @@
 
 require 'resque'
 require_relative 'prioritize/version'
+
+require_relative 'prioritize/serializer'
+require_relative 'prioritize/priority_wrapper'
+
 require_relative 'prioritize/resque_extension'
 require_relative 'prioritize/data_store_extension'
 require_relative 'prioritize/redis_future_extension'
@@ -9,6 +13,14 @@ require_relative 'prioritize/redis_future_extension'
 Resque.prepend Resque::Plugins::Prioritize::ResqueExtension
 Resque::DataStore.prepend Resque::Plugins::Prioritize::DataStoreExtension
 Redis::Future.include Resque::Plugins::Prioritize::RedisFutureExtension
+
+begin
+  require 'resque-scheduler'
+  require_relative 'prioritize/resque_scheduler_util_extension'
+
+  Resque::Scheduler::Util.prepend Resque::Plugins::Prioritize::ResqueSchedulerUtilExtension
+rescue LoadError # rubocop:disable Lint/SuppressedException
+end
 
 module Resque
   module Plugins
@@ -28,9 +40,6 @@ module Resque
     # So, if TestWorker has a @queue :test, and you will enqueue it with priority, Resque will put
     # it into `test_prioritized` queue.
     module Prioritize
-      PRIORITY_REGEXP = /\{\{priority\}:(\d+)\}/.freeze
-      UUID_REGEXP = /\{\{uuid\}:([^}]+)\}/.freeze
-
       @prioritized_queue_postfix = '_prioritized'
 
       class << self
@@ -40,52 +49,35 @@ module Resque
           base.extend ClassMethods
         end
 
-        def prioritized_name(queue)
+        def to_prioritized_queue(queue)
           queue = queue.to_s
 
           :"#{queue}#{prioritized_queue_postfix unless queue.include?(prioritized_queue_postfix)}"
+        end
+
+        # Needs to be used with the Resque "constantize" method
+        def constantize_wrapper(camel_cased_word, &block)
+          Serializer.extract(camel_cased_word, :priority).then { |rest:, priority:|
+            block.call(rest)
+                 .then { |klass| priority ? klass.with_priority(priority.to_i) : klass }
+          }
         end
       end
 
       # Helper methods for workers
       module ClassMethods
+        attr_accessor :resque_prioritize_priority
+
         # Returns worker without priority.
         # For jobs which does not have a priority - just returns itself.
         def without_priority
-          @resque_prioritize_priority ? superclass : self
+          resque_prioritize_priority ? superclass.without_priority : self
         end
 
         # Returns inherited class with stored priority
         def with_priority(priority)
           # in cases when someone call twice `Worker.with_priority(10).with_priority(20)`
-          original = without_priority
-
-          # Produce an exact copy of the current worker's class, including all data,
-          # but with @resque_prioritize_priority set. It is also stringified differently, as
-          # "WorkerName{priority:10}", allowing redefined Resque deserializer to understand how to
-          # process it.
-          Class.new(original).tap do |inherited|
-            inherited.instance_variable_set(:@resque_prioritize_priority, priority)
-
-            original.instance_variables.each do |var|
-              value = original.instance_variable_get(var)
-              value = Prioritize.prioritized_name(value) if var == :@queue
-
-              inherited.instance_variable_set(var, value)
-            end
-
-            # override stringify methods
-            %i[to_s name inspect].each do |m|
-              inherited.define_singleton_method(m) do
-                "#{original.send(m)}{{priority}:#{@resque_prioritize_priority}}"
-              end
-            end
-
-            # Check equality with two inherited class
-            inherited.define_singleton_method(:==) do |other|
-              other.to_s == inherited.to_s
-            end
-          end
+          PriorityWrapper.new(without_priority, priority).call
         end
       end
     end
