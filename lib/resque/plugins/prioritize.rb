@@ -57,9 +57,11 @@ module Resque
 
         # Needs to be used with the Resque "constantize" method
         def constantize_wrapper(camel_cased_word, &block)
-          Serializer.extract(camel_cased_word, :priority).then { |rest:, priority:|
-            block.call(rest)
-                 .then { |klass| priority ? klass.with_priority(priority.to_i) : klass }
+          Serializer.extract(camel_cased_word, :priority).then { |item|
+            block.call(item[:rest])
+                 .then { |klass|
+                   item[:priority] ? klass.with_priority(item[:priority].to_i) : klass
+                 }
           }
         end
       end
