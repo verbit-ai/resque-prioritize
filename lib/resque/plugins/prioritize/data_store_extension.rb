@@ -49,9 +49,9 @@ module Resque
           private
 
           def z_push_to_queue(queue, encoded_item, priority)
-            @redis.pipelined do
+            @redis.pipelined do |pipeline|
               watch_queue(queue)
-              @redis.zadd(redis_key_for_queue(queue), priority, with_uuid(encoded_item))
+              pipeline.zadd(redis_key_for_queue(queue), priority, with_uuid(encoded_item))
             end
           end
 
